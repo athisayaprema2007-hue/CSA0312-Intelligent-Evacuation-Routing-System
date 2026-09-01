@@ -1,0 +1,43 @@
+30% ROAD FAILURE EXPERIMENT
+===========================
+
+Network: 8200 intersections, 21000 logical bidirectional roads
+Deterministic generation seed: 20260831
+Roads blocked: 6300 of 21000 (exactly 30%), selected by a
+Fisher-Yates shuffle seeded with 20260831 ^ 0xC0FFEE.
+
+Timing: standard C clock(), avg of 3 Dijkstra runs per query,
+resolution about 1 ms; graph generation and file writing excluded.
+
+PER-QUERY RESULTS (before -> after blocking)
+Q   src    dst    | reach_pre   reach_post  | cost_pre  cost_post | hops0  hops1  | ms_pre    ms_post  
+1   4546   2343   | yes         yes         | 161       265       | 9      10     | 2.000     4.000    
+2   488    4320   | yes         yes         | 154       327       | 5      11     | 0.000     5.667    
+3   7680   4213   | yes         yes         | 212       344       | 9      15     | 8.333     10.000   
+4   8005   1947   | yes         yes         | 223       258       | 11     12     | 3.000     2.000    
+5   5674   1101   | yes         yes         | 241       297       | 7      8      | 8.000     2.667    
+6   3568   5188   | yes         yes         | 215       218       | 12     7      | 5.000     0.000    
+7   7204   7818   | yes         yes         | 238       413       | 13     18     | 5.667     6.667    
+8   7116   6482   | yes         yes         | 228       324       | 9      11     | 7.667     2.667    
+9   4541   3854   | yes         yes         | 241       310       | 10     19     | 5.333     1.000    
+10  6012   4594   | yes         yes         | 265       411       | 7      12     | 1.667     5.000    
+
+SUMMARY
+Reachable destination queries: 10/10 before, 10/10 after.
+Intersections reachable from intersection 4546: 8200 of 8200 before,
+8026 of 8200 after blocking.
+Query 1: cost 161 -> 265 (+104), route length 9 -> 10 intersections.
+Query 2: cost 154 -> 327 (+173), route length 5 -> 11 intersections.
+Query 3: cost 212 -> 344 (+132), route length 9 -> 15 intersections.
+Query 4: cost 223 -> 258 (+35), route length 11 -> 12 intersections.
+Query 5: cost 241 -> 297 (+56), route length 7 -> 8 intersections.
+Query 6: cost 215 -> 218 (+3), route length 12 -> 7 intersections.
+Query 7: cost 238 -> 413 (+175), route length 13 -> 18 intersections.
+Query 8: cost 228 -> 324 (+96), route length 9 -> 11 intersections.
+Query 9: cost 241 -> 310 (+69), route length 10 -> 19 intersections.
+Query 10: cost 265 -> 411 (+146), route length 7 -> 12 intersections.
+
+CACHE BEHAVIOUR
+Every route cached before the failures was invalidated: blocking
+roads bumped the graph version, so the rerun evicted 10 stale
+entries and recomputed (hits=0, misses=20, stale_evictions=10).
