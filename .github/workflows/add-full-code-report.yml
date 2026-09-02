@@ -1,0 +1,270 @@
+name: Add full source code appendix to report
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/add-full-code-report.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install document tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-docx
+          sudo apt-get update
+          sudo apt-get install -y libreoffice poppler-utils fonts-liberation
+
+      - name: Add full source code appendix
+        shell: bash
+        run: |
+          cat > /tmp/add_full_code.py <<'PY'
+          from pathlib import Path
+          from docx import Document
+          from docx.shared import Pt, Inches
+          from docx.enum.text import WD_ALIGN_PARAGRAPH
+          from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+          from docx.oxml import OxmlElement
+          from docx.oxml.ns import qn
+
+          REPORT = Path('report/CSA0312_Final_Assignment_Report.docx')
+          FILES = [
+              'src/graph.h',
+              'src/graph.c',
+              'src/hashmap.h',
+              'src/hashmap.c',
+              'src/hashset.h',
+              'src/hashset.c',
+              'src/minheap.h',
+              'src/minheap.c',
+              'src/dijkstra.h',
+              'src/dijkstra.c',
+              'src/route_cache.h',
+              'src/route_cache.c',
+              'src/console_ui.h',
+              'src/console_ui.c',
+              'src/main.c',
+              'tests/test_runner.c',
+          ]
+
+          doc = Document(REPORT)
+          existing = '\n'.join(p.text for p in doc.paragraphs)
+          if 'Appendix A. Full Source Code' in existing:
+              raise SystemExit('Full source-code appendix already exists; refusing to duplicate it.')
+
+          # The paragraph immediately before the landscape rubric carries the
+          # section break. Insert the appendix before that paragraph so the
+          # existing rubric remains untouched and landscape.
+          anchor = None
+          for p in doc.paragraphs:
+              if p._p.xpath('./w:pPr/w:sectPr'):
+                  anchor = p
+                  break
+          if anchor is None:
+              raise RuntimeError('Could not locate the rubric section-break paragraph.')
+
+          def set_run_font(run, name='Times New Roman', size=11, bold=False, italic=False):
+              run.font.name = name
+              run.font.size = Pt(size)
+              run.bold = bold
+              run.italic = italic
+              rPr = run._element.get_or_add_rPr()
+              rFonts = rPr.rFonts
+              if rFonts is None:
+                  rFonts = OxmlElement('w:rFonts')
+                  rPr.insert(0, rFonts)
+              rFonts.set(qn('w:ascii'), name)
+              rFonts.set(qn('w:hAnsi'), name)
+              rFonts.set(qn('w:eastAsia'), name)
+              rFonts.set(qn('w:cs'), name)
+
+          def add_para(text='', *, size=11, bold=False, italic=False,
+                       before=0, after=0, page_break=False, keep_next=False,
+                       alignment=None):
+              p = anchor.insert_paragraph_before()
+              if page_break:
+                  p.paragraph_format.page_break_before = True
+              p.paragraph_format.space_before = Pt(before)
+              p.paragraph_format.space_after = Pt(after)
+              p.paragraph_format.line_spacing = 1.0
+              p.paragraph_format.keep_with_next = keep_next
+              if alignment is not None:
+                  p.alignment = alignment
+              if text:
+                  r = p.add_run(text)
+                  set_run_font(r, size=size, bold=bold, italic=italic)
+              return p
+
+          def set_cell_margins(cell, top=0, start=45, bottom=0, end=45):
+              tc = cell._tc
+              tcPr = tc.get_or_add_tcPr()
+              tcMar = tcPr.first_child_found_in('w:tcMar')
+              if tcMar is None:
+                  tcMar = OxmlElement('w:tcMar')
+                  tcPr.append(tcMar)
+              for m, value in [('top', top), ('start', start), ('bottom', bottom), ('end', end)]:
+                  node = tcMar.find(qn('w:' + m))
+                  if node is None:
+                      node = OxmlElement('w:' + m)
+                      tcMar.append(node)
+                  node.set(qn('w:w'), str(value))
+                  node.set(qn('w:type'), 'dxa')
+
+          def set_code_table_borders(table):
+              tblPr = table._tbl.tblPr
+              old = tblPr.find(qn('w:tblBorders'))
+              if old is not None:
+                  tblPr.remove(old)
+              borders = OxmlElement('w:tblBorders')
+              for edge in ('top', 'left', 'bottom', 'right', 'insideH'):
+                  e = OxmlElement('w:' + edge)
+                  e.set(qn('w:val'), 'nil')
+                  borders.append(e)
+              inside = OxmlElement('w:insideV')
+              inside.set(qn('w:val'), 'single')
+              inside.set(qn('w:sz'), '4')
+              inside.set(qn('w:space'), '0')
+              inside.set(qn('w:color'), 'A6A6A6')
+              borders.append(inside)
+              tblPr.append(borders)
+
+              layout = tblPr.find(qn('w:tblLayout'))
+              if layout is None:
+                  layout = OxmlElement('w:tblLayout')
+                  tblPr.append(layout)
+              layout.set(qn('w:type'), 'fixed')
+
+          def insert_table_before_anchor(table):
+              anchor._p.addprevious(table._tbl)
+
+          # Start the appendix on its own page in the portrait section.
+          add_para('Appendix A. Full Source Code', size=14, bold=True,
+                   before=0, after=6, page_break=True, keep_next=True)
+          add_para(
+              'The complete modular C implementation is reproduced below in text format. '
+              'Line numbers are provided only for reference and are not part of the source files.',
+              size=11, after=8
+          )
+
+          total_lines = 0
+          for idx, rel in enumerate(FILES, start=1):
+              path = Path(rel)
+              if not path.is_file():
+                  raise FileNotFoundError(rel)
+              lines = path.read_text(encoding='utf-8').splitlines()
+              total_lines += len(lines)
+
+              add_para(f'A.{idx} {rel}', size=11, bold=True,
+                       before=6, after=3, keep_next=True)
+
+              table = doc.add_table(rows=0, cols=2)
+              table.autofit = False
+              table.columns[0].width = Inches(0.48)
+              table.columns[1].width = Inches(6.95)
+              set_code_table_borders(table)
+
+              for n, line in enumerate(lines, start=1):
+                  row = table.add_row()
+                  row.cells[0].width = Inches(0.48)
+                  row.cells[1].width = Inches(6.95)
+                  for cell in row.cells:
+                      cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
+                      set_cell_margins(cell)
+
+                  pno = row.cells[0].paragraphs[0]
+                  pno.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                  pno.paragraph_format.space_before = Pt(0)
+                  pno.paragraph_format.space_after = Pt(0)
+                  pno.paragraph_format.line_spacing = 1.0
+                  rno = pno.add_run(str(n))
+                  set_run_font(rno, name='Courier New', size=7.5)
+                  rno.font.color.rgb = None
+
+                  pcode = row.cells[1].paragraphs[0]
+                  pcode.paragraph_format.space_before = Pt(0)
+                  pcode.paragraph_format.space_after = Pt(0)
+                  pcode.paragraph_format.line_spacing = 1.0
+                  rcode = pcode.add_run(line if line else ' ')
+                  set_run_font(rcode, name='Courier New', size=7.5)
+
+              # Move the finished table from the document tail to immediately
+              # before the rubric section break.
+              insert_table_before_anchor(table)
+              add_para('', size=7, after=0)
+
+          doc.save(REPORT)
+          print(f'Inserted {len(FILES)} source files and {total_lines} source lines.')
+          PY
+          python /tmp/add_full_code.py
+
+      - name: Export PDF
+        run: |
+          rm -f report/CSA0312_Final_Assignment_Report.pdf
+          libreoffice --headless --convert-to pdf --outdir report report/CSA0312_Final_Assignment_Report.docx
+          test -s report/CSA0312_Final_Assignment_Report.pdf
+
+      - name: Verify report contents
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from docx import Document
+          doc=Document('report/CSA0312_Final_Assignment_Report.docx')
+          text='\n'.join(p.text for p in doc.paragraphs)
+          cell_text='\n'.join(c.text for t in doc.tables for r in t.rows for c in r.cells)
+          all_text=text+'\n'+cell_text
+          required_headings=[
+              'Appendix A. Full Source Code',
+              'A.1 src/graph.h', 'A.2 src/graph.c',
+              'A.3 src/hashmap.h', 'A.4 src/hashmap.c',
+              'A.5 src/hashset.h', 'A.6 src/hashset.c',
+              'A.7 src/minheap.h', 'A.8 src/minheap.c',
+              'A.9 src/dijkstra.h', 'A.10 src/dijkstra.c',
+              'A.11 src/route_cache.h', 'A.12 src/route_cache.c',
+              'A.13 src/console_ui.h', 'A.14 src/console_ui.c',
+              'A.15 src/main.c', 'A.16 tests/test_runner.c',
+          ]
+          for h in required_headings:
+              assert h in text, f'Missing appendix heading: {h}'
+          # Preserve core verified content.
+          for token in ['A. Student Work','16 / 16 PASS','3.91 ms','7.000 ms','0.00003 ms','6,300','8,026','174','+3 to +175','Assessment Rubrics']:
+              assert token in all_text, f'Missing preserved report content: {token}'
+          assert 'typedef struct Edge' in all_text
+          assert 'int main' in all_text
+          print('DOCX appendix and preserved content verified.')
+          PY
+
+          pages=$(pdfinfo report/CSA0312_Final_Assignment_Report.pdf | awk '/^Pages:/ {print $2}')
+          echo "PDF pages: $pages"
+          test "$pages" -ge 50
+          pdftotext report/CSA0312_Final_Assignment_Report.pdf /tmp/report.txt
+          grep -Fq 'Appendix A. Full Source Code' /tmp/report.txt
+          grep -Fq 'A.16 tests/test_runner.c' /tmp/report.txt
+          echo 'PDF appendix text verified.'
+          sha256sum report/CSA0312_Final_Assignment_Report.docx report/CSA0312_Final_Assignment_Report.pdf
+
+      - name: Commit updated report
+        run: |
+          git config user.name 'athisayaprema2007-hue'
+          git config user.email 'athisayaprema2007@gmail.com'
+          git add report/CSA0312_Final_Assignment_Report.docx report/CSA0312_Final_Assignment_Report.pdf
+          if git diff --cached --quiet; then
+            echo 'No report changes to commit.'
+          else
+            git commit -m 'Add complete source code appendix to report'
+            git push
+          fi
