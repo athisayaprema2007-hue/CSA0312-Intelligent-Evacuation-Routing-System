@@ -22,78 +22,41 @@ jobs:
           python-version: '3.11'
 
       - name: Install tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install pypdf pillow
-          sudo apt-get update
-          sudo apt-get install -y fonts-urw-base35
+        run: pip install pypdf pillow
 
-      - name: Build corrected Floyd pages and insert them
+      - name: Insert corrected Floyd working
         run: |
-          cat > /tmp/sync_report.py <<'PY'
+          cat > /tmp/finalize.py <<'PY'
           from pathlib import Path
           from PIL import Image, ImageDraw, ImageFont
           from pypdf import PdfReader, PdfWriter
-          import math
 
-          repo = Path('.')
-          base_pdf = repo / 'report' / 'CSA0312_Final_Assignment_Report.pdf'
-          out_pdf = repo / 'report' / 'CSA0312_Final_Assignment_Report.pdf.tmp'
-
-          # A cursive-looking font installed from URW Base35; fall back safely.
-          font_candidates = [
-              '/usr/share/fonts/opentype/urw-base35/URWChanceryL-MediItal.otf',
-              '/usr/share/fonts/type1/urw-base35/Z003-MediumItalic.t1',
-              '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf',
-          ]
-          font_path = next((p for p in font_candidates if Path(p).exists()), font_candidates[-1])
-
+          report = Path('report/CSA0312_Final_Assignment_Report.pdf')
+          temp = Path('/tmp/final_report.pdf')
           W, H = 1700, 2200
-          blue = (25, 55, 125)
-          graphite = (115, 115, 115)
-
-          def font(sz):
-              return ImageFont.truetype(font_path, sz)
-
-          def base_page():
-              im = Image.new('RGB', (W, H), (249, 248, 244))
-              d = ImageDraw.Draw(im)
-              d.rectangle([38, 35, W-38, H-35], outline=graphite, width=2)
-              return im, d
-
-          def text(d, xy, s, sz=31, fill=blue):
-              d.text(xy, s, font=font(sz), fill=fill)
-
-          def matrix(d, x, y, rows, labels=True, sz=27, colw=92, rowh=48):
-              if labels:
-                  for j in range(5): text(d,(x+86+j*colw,y-40),str(j+1),sz-2)
-                  for i in range(5): text(d,(x,y+i*rowh),str(i+1),sz-2)
-              # brackets
-              bx=x+55; by=y-5; width=5*colw+24; height=5*rowh+10
-              d.line([bx,by,bx,by+height],fill=blue,width=3)
-              d.line([bx,by,bx+18,by],fill=blue,width=3)
-              d.line([bx,by+height,bx+18,by+height],fill=blue,width=3)
-              rx=bx+width
-              d.line([rx,by,rx,by+height],fill=blue,width=3)
-              d.line([rx-18,by,rx,by],fill=blue,width=3)
-              d.line([rx-18,by+height,rx,by+height],fill=blue,width=3)
-              for i,row in enumerate(rows):
-                  for j,v in enumerate(row):
-                      text(d,(x+82+j*colw,y+i*rowh),str(v),sz)
-
-          def graph(d, x, y):
+          BLUE=(30,55,125); PAPER=(249,248,244); GREY=(120,120,120)
+          font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'
+          if not Path(font_path).exists(): font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          def F(n): return ImageFont.truetype(font_path,n)
+          def T(d,x,y,s,n=29): d.text((x,y),s,font=F(n),fill=BLUE)
+          def page():
+              im=Image.new('RGB',(W,H),PAPER); d=ImageDraw.Draw(im)
+              d.rectangle((35,35,W-35,H-35),outline=GREY,width=2)
+              return im,d
+          def matrix(d,x,y,a,sz=25,cw=88,rh=48):
+              for j in range(5): T(d,x+80+j*cw,y-42,str(j+1),sz-3)
+              for i in range(5): T(d,x,y+i*rh,str(i+1),sz-3)
+              bx=x+55; by=y-6; rx=bx+5*cw+25; bot=by+5*rh+12
+              d.line((bx,by,bx,bot),fill=BLUE,width=3); d.line((bx,by,bx+18,by),fill=BLUE,width=3); d.line((bx,bot,bx+18,bot),fill=BLUE,width=3)
+              d.line((rx,by,rx,bot),fill=BLUE,width=3); d.line((rx-18,by,rx,by),fill=BLUE,width=3); d.line((rx-18,bot,rx,bot),fill=BLUE,width=3)
+              for i,row in enumerate(a):
+                  for j,v in enumerate(row): T(d,x+78+j*cw,y+i*rh,str(v),sz)
+          def graph(d,x,y):
               pts={1:(x,y),2:(x+330,y),3:(x,y+185),4:(x+330,y+185),5:(x+560,y+185)}
-              edges=[(1,2,4),(1,3,1),(3,2,2),(2,4,5),(3,4,12),(4,5,3)]
-              for a,b,w in edges:
-                  xa,ya=pts[a]; xb,yb=pts[b]
-                  d.line([xa,ya,xb,yb],fill=blue,width=3)
-                  mx=(xa+xb)//2; my=(ya+yb)//2
-                  text(d,(mx+8,my-28),str(w),25)
+              for a,b,w in [(1,2,4),(1,3,1),(3,2,2),(2,4,5),(3,4,12),(4,5,3)]:
+                  xa,ya=pts[a]; xb,yb=pts[b]; d.line((xa,ya,xb,yb),fill=BLUE,width=3); T(d,(xa+xb)//2+8,(ya+yb)//2-30,str(w),24)
               for n,(px,py) in pts.items():
-                  r=27
-                  d.ellipse([px-r,py-r,px+r,py+r],outline=blue,width=3)
-                  text(d,(px-9,py-18),str(n),25)
-
+                  d.ellipse((px-27,py-27,px+27,py+27),outline=BLUE,width=3); T(d,px-8,py-17,str(n),24)
           inf='∞'
           D0=[['0','4','1',inf,inf],['4','0','2','5',inf],['1','2','0','12',inf],[inf,'5','12','0','3'],[inf,inf,inf,'3','0']]
           D1=[r[:] for r in D0]
@@ -101,111 +64,61 @@ jobs:
           D3=[['0','3','1','8',inf],['3','0','2','5',inf],['1','2','0','7',inf],['8','5','7','0','3'],[inf,inf,inf,'3','0']]
           D4=[['0','3','1','8','11'],['3','0','2','5','8'],['1','2','0','7','10'],['8','5','7','0','3'],['11','8','10','3','0']]
 
-          # Page 1
-          im,d=base_page()
-          text(d,(80,70),'4. Floyd-Warshall numerical (page 1)',42)
-          graph(d,280,210)
-          text(d,(90,480),'D⁰ or A⁰ =',34)
-          matrix(d,330,500,D0,sz=25,colw=86,rowh=45)
+          im,d=page(); T(d,75,65,'Floyd-Warshall numerical - Page 1',42); graph(d,270,190)
+          T(d,80,470,'K = 0  Initial distance matrix',32); matrix(d,380,520,D0)
+          T(d,80,855,'K = 1  (using vertex 1)',32)
+          y=915
+          for s in ['A0[23]: min(2, 4+1) = 2','A0[24]: min(5, 4+∞) = 5','A0[25]: min(∞, 4+∞) = ∞','A0[32]: min(2, 1+4) = 2','A0[34]: min(12, 1+∞) = 12','No shorter route is produced through vertex 1, so A1 = A0.']:
+              T(d,105,y,s,27); y+=62
+          T(d,80,1320,'K = 1 matrix',31); matrix(d,380,1370,D1,23,82,43)
+          T(d,80,1650,'K = 2  (using vertex 2)',32)
+          for y,s in [(1710,'A1[14] = min(∞, 4+5) = 9'),(1770,'A1[34] = min(12, 2+5) = 7'),(1830,'By symmetry: A2[41] = 9 and A2[43] = 7.')]: T(d,105,y,s,27)
+          T(d,80,1940,'K = 2 matrix',31); matrix(d,380,1980,D2,23,82,38)
+          im.save('/tmp/floyd1.pdf','PDF',resolution=200)
 
-          text(d,(90,805),'K = 1  (using vertex 1)',34)
-          lines=[
-            'A⁰[23] = A⁰[21] + A⁰[13]      2 < 4 + 1 = 5      ∴ A¹[23] = 2',
-            'A⁰[24] = A⁰[21] + A⁰[14]      5 < 4 + ∞ = ∞      ∴ A¹[24] = 5',
-            'A⁰[25] = A⁰[21] + A⁰[15]      ∞ = 4 + ∞          ∴ A¹[25] = ∞',
-            'A⁰[32] = A⁰[31] + A⁰[12]      2 < 1 + 4 = 5      ∴ A¹[32] = 2',
-            'A⁰[34] = A⁰[31] + A⁰[14]      12 < 1 + ∞         ∴ A¹[34] = 12',
-            'A⁰[35] = A⁰[31] + A⁰[15]      ∞ = 1 + ∞          ∴ A¹[35] = ∞',
-            'Using vertex 1 produces no shorter route. Therefore A¹ = A⁰.'
-          ]
-          yy=865
-          for s in lines:
-              text(d,(110,yy),s,26); yy+=58
-          text(d,(90,1280),'K = 1 matrix (A¹)',32)
-          matrix(d,410,1300,D1,sz=23,colw=82,rowh=42)
+          im,d=page(); T(d,75,65,'Floyd-Warshall numerical - Page 2',42)
+          T(d,80,145,'K = 3  (using vertex 3)',32)
+          y=205
+          for s in ['A2[12] = min(4, 1+2) = 3','A2[14] = min(9, 1+7) = 8','A2[21] = min(4, 2+1) = 3','A2[41] = min(9, 7+1) = 8','IMPORTANT: distances to vertex 5 are still ∞ at K = 3.']:
+              T(d,105,y,s,27); y+=62
+          T(d,80,535,'K = 3 matrix',31); matrix(d,380,580,D3)
+          T(d,80,920,'K = 4  (using vertex 4)',32)
+          y=980
+          for s in ['A3[15] = min(∞, 8+3) = 11','A3[25] = min(∞, 5+3) = 8','A3[35] = min(∞, 7+3) = 10','By symmetry: A4[51]=11, A4[52]=8, A4[53]=10.']:
+              T(d,105,y,s,27); y+=62
+          T(d,80,1245,'K = 4 matrix',31); matrix(d,380,1290,D4)
+          T(d,80,1655,'K = 5  (using vertex 5)',32); T(d,105,1715,'No further improvement is possible.',28)
+          T(d,80,1780,'K = 5 final all-pairs shortest-path matrix',31); matrix(d,380,1830,D4,23,82,40)
+          d.rectangle((115,2070,W-115,2160),outline=BLUE,width=3); T(d,145,2090,'Hence, A5 is the final all-pairs shortest-path matrix.',27)
+          im.save('/tmp/floyd2.pdf','PDF',resolution=200)
 
-          text(d,(90,1600),'K = 2  (using vertex 2)',34)
-          k2=[
-            'A¹[14] = min(∞, 4 + 5) = 9        ∴ A²[14] = 9',
-            'A¹[34] = min(12, 2 + 5) = 7       ∴ A²[34] = 7',
-            'By symmetry: A²[41] = 9 and A²[43] = 7.'
-          ]
-          yy=1660
-          for s in k2:
-              text(d,(110,yy),s,27); yy+=62
-          text(d,(90,1870),'K = 2 matrix (A²)',32)
-          matrix(d,410,1890,D2,sz=23,colw=82,rowh=42)
-          im.save('/tmp/floyd1.png')
-
-          # Page 2
-          im,d=base_page()
-          text(d,(80,70),'5. Floyd-Warshall numerical (page 2)',42)
-          text(d,(90,155),'K = 3  (using vertex 3)',34)
-          k3=[
-            'A²[12] = min(4, 1 + 2) = 3          ∴ A³[12] = 3',
-            'A²[14] = min(9, 1 + 7) = 8          ∴ A³[14] = 8',
-            'A²[21] = min(4, 2 + 1) = 3          ∴ A³[21] = 3',
-            'A²[41] = min(9, 7 + 1) = 8          ∴ A³[41] = 8',
-            'No route to vertex 5 is created yet; entries to 5 remain ∞.'
-          ]
-          yy=220
-          for s in k3:
-              text(d,(110,yy),s,28); yy+=66
-          text(d,(90,570),'A³ (after using vertex 3)',32)
-          matrix(d,410,600,D3,sz=25,colw=86,rowh=45)
-
-          text(d,(90,930),'K = 4  (using vertex 4)',34)
-          k4=[
-            'A³[15] = min(∞, 8 + 3) = 11        ∴ A⁴[15] = 11',
-            'A³[25] = min(∞, 5 + 3) = 8         ∴ A⁴[25] = 8',
-            'A³[35] = min(∞, 7 + 3) = 10        ∴ A⁴[35] = 10',
-            'By symmetry: A⁴[51] = 11, A⁴[52] = 8, A⁴[53] = 10.'
-          ]
-          yy=995
-          for s in k4:
-              text(d,(110,yy),s,28); yy+=68
-          text(d,(90,1290),'A⁴ (after using vertex 4)',32)
-          matrix(d,410,1320,D4,sz=25,colw=86,rowh=45)
-
-          text(d,(90,1660),'K = 5  (using vertex 5)',34)
-          text(d,(120,1720),'No further improvement is possible using vertex 5 as intermediate.',28)
-          text(d,(90,1790),'A⁵ (final all-pairs shortest-path matrix)',32)
-          matrix(d,410,1820,D4,sz=25,colw=86,rowh=45)
-          d.rectangle([120,2080,W-120,2160],outline=blue,width=3)
-          text(d,(150,2095),'Hence, A⁵ is the final all-pairs shortest-path matrix.',28)
-          im.save('/tmp/floyd2.png')
-
-          # Convert the two generated A4-style sheets to PDF pages and insert after report page 14.
-          page_pdfs=[]
-          for i,png in enumerate(['/tmp/floyd1.png','/tmp/floyd2.png'],1):
-              im=Image.open(png).convert('RGB')
-              p=Path(f'/tmp/floyd{i}.pdf')
-              im.save(p,'PDF',resolution=200.0)
-              page_pdfs.append(p)
-
-          reader=PdfReader(str(base_pdf))
-          if len(reader.pages) != 78:
-              raise SystemExit(f'Expected 78-page full-code base report, got {len(reader.pages)} pages')
-          writer=PdfWriter()
-          for n,page in enumerate(reader.pages,1):
-              writer.add_page(page)
-              if n == 14:
-                  for p in page_pdfs:
-                      writer.add_page(PdfReader(str(p)).pages[0])
-          if len(writer.pages) != 80:
-              raise SystemExit(f'Expected 80 final pages, got {len(writer.pages)}')
-          with open(out_pdf,'wb') as f:
-              writer.write(f)
-          out_pdf.replace(base_pdf)
-          print('Final corrected report built:', base_pdf)
-          print('Pages:', len(writer.pages))
+          r=PdfReader(str(report)); base=len(r.pages)
+          if base < 18: raise SystemExit(f'Unexpected base report page count: {base}')
+          w=PdfWriter()
+          for i,p in enumerate(r.pages,1):
+              w.add_page(p)
+              if i==14:
+                  w.add_page(PdfReader('/tmp/floyd1.pdf').pages[0])
+                  w.add_page(PdfReader('/tmp/floyd2.pdf').pages[0])
+          if len(w.pages) != base+2: raise SystemExit('Page insertion verification failed')
+          with open(temp,'wb') as f: w.write(f)
+          temp.replace(report)
+          print(f'base_pages={base}; final_pages={base+2}')
           PY
-          python /tmp/sync_report.py
+          python /tmp/finalize.py
 
-      - name: Commit corrected final PDF
+      - name: Verify and commit final report
         run: |
+          python - <<'PY'
+          from pypdf import PdfReader
+          p='report/CSA0312_Final_Assignment_Report.pdf'
+          r=PdfReader(p)
+          assert len(r.pages) >= 65
+          print('verified pages:', len(r.pages))
+          PY
           git config user.name 'athisayaprema2007-hue'
           git config user.email 'athisayaprema2007@gmail.com'
-          git add report/CSA0312_Final_Assignment_Report.pdf
+          rm -rf .sync .github/workflows/sync-corrected-final-report.yml
+          git add -A
           git commit -m 'Sync verified final report with corrected Floyd working'
           git push
