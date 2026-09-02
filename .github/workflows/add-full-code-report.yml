@@ -1,0 +1,83 @@
+name: Add full source code appendix to report
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/add-full-code-report.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install document tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-docx
+          sudo apt-get update
+          sudo apt-get install -y libreoffice fonts-dejavu-core
+
+      - name: Restore appendix builder
+        shell: bash
+        run: |
+          echo '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' | base64 -d | gunzip > /tmp/add_full_code.py
+          python -m py_compile /tmp/add_full_code.py
+
+      - name: Add full source code appendix
+        run: |
+          python /tmp/add_full_code.py report/CSA0312_Final_Assignment_Report.docx . report/CSA0312_Final_Assignment_Report.docx
+
+      - name: Export PDF
+        run: |
+          rm -f report/CSA0312_Final_Assignment_Report.pdf
+          libreoffice --headless --convert-to pdf --outdir report report/CSA0312_Final_Assignment_Report.docx
+          test -s report/CSA0312_Final_Assignment_Report.pdf
+
+      - name: Verify appendix and faculty structure
+        run: |
+          python - <<'PY2'
+          from docx import Document
+          doc=Document('report/CSA0312_Final_Assignment_Report.docx')
+          para=chr(10).join(p.text for p in doc.paragraphs)
+          tables=chr(10).join(c.text for t in doc.tables for r in t.rows for c in r.cells)
+          text=para+chr(10)+tables
+          faculty=[
+            'A. Student Work','1. Problem Understanding and Formulation','2. Application of Course Knowledge',
+            '3. Solution / Design / Methodology','4. Use of Modern Tools','5. Results and Validation',
+            '6. Analysis and Engineering Decision','7. Broader Considerations','8. Conclusion','9. Student Reflection','10. References'
+          ]
+          for h in faculty:
+              assert h in para, f'Missing faculty heading: {h}'
+          assert 'Appendix A. Full Source Code' in para
+          files=['src/graph.h','src/graph.c','src/hashmap.h','src/hashmap.c','src/hashset.h','src/hashset.c','src/minheap.h','src/minheap.c','src/dijkstra.h','src/dijkstra.c','src/route_cache.h','src/route_cache.c','src/console_ui.h','src/console_ui.c','src/main.c','tests/test_runner.c']
+          for f in files:
+              assert f in para, f'Missing appendix file heading: {f}'
+          for token in ['8,200','21,000','16 / 16 PASS','3.91 ms','7.000 ms','0.00003 ms','6,300','8,026','174','+3 to +175']:
+              assert token in text, f'Missing verified value: {token}'
+          assert len(doc.inline_shapes) >= 4, 'Architecture diagram / terminal screenshots missing'
+          print('Faculty structure + full source appendix verified')
+          PY2
+
+      - name: Commit updated report
+        run: |
+          git config user.name 'athisayaprema2007-hue'
+          git config user.email 'athisayaprema2007@gmail.com'
+          git add report/CSA0312_Final_Assignment_Report.docx report/CSA0312_Final_Assignment_Report.pdf
+          if git diff --cached --quiet; then
+            echo 'No report changes to commit.'
+          else
+            git commit -m 'Add full source code appendix to report'
+            git push
+          fi
